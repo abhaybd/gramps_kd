@@ -31,39 +31,21 @@ catkin_package(CATKIN_DEPENDS
   urdf
 )
 
-add_library(gramps_kd STATIC
-  src/kinematics_server.cpp
+add_executable(kd_server
+  src/kd_server_node.cpp
+  src/kd_server.cpp
 )
-add_dependencies(gramps_kd
+add_dependencies(kd_server
     ${catkin_EXPORTED_TARGETS}
     gramps_kd_gencpp
 )
-target_link_libraries(gramps_kd
+target_link_libraries(kd_server
   ${catkin_LIBRARIES}
   pinocchio::pinocchio
 )
-target_include_directories(gramps_kd SYSTEM PUBLIC
+target_include_directories(kd_server SYSTEM PUBLIC
   ${catkin_INCLUDE_DIRS}
 )
-target_include_directories(gramps_kd PUBLIC
-  include
-)
-
-add_executable(kinematics_server
-  src/kinematics_server_node.cpp
-)
-add_dependencies(gramps_kd
-    ${catkin_EXPORTED_TARGETS}
-    gramps_kd_gencpp
-)
-target_link_libraries(kinematics_server
-  ${catkin_LIBRARIES}
-  gramps_kd
-  pinocchio::pinocchio
-)
-target_include_directories(kinematics_server SYSTEM PUBLIC
-  ${catkin_INCLUDE_DIRS}
-)
-target_include_directories(kinematics_server PUBLIC
+target_include_directories(kd_server PUBLIC
   include
 )

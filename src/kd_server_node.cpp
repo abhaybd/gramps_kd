@@ -4,7 +4,7 @@
 
 #include <memory>
 
-#include "gramps_kd/kinematics_server.h"
+#include "gramps_kd/kd_server.h"
 
 using namespace gramps_kd;
 
@@ -31,9 +31,9 @@ int main(int argc, char **argv) {
   ik_params.dt = nh.param("dt", 1e-1);
   ik_params.damping = nh.param("damping", 1e-6);
 
-  KinematicsServer kinematics_server(urdf_model, ik_params);
-  auto fk = nh.advertiseService("forward_kinematics", &KinematicsServer::forward_kinematics, &kinematics_server);
-  auto ik = nh.advertiseService("inverse_kinematics", &KinematicsServer::inverse_kinematics, &kinematics_server);
+  KDServer server(urdf_model, ik_params);
+  auto fk = nh.advertiseService("forward_kinematics", &KDServer::forward_kinematics, &server);
+  auto ik = nh.advertiseService("inverse_kinematics", &KDServer::inverse_kinematics, &server);
 
   ros::spin();
 

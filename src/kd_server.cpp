@@ -1,4 +1,4 @@
-#include "gramps_kd/kinematics_server.h"
+#include "gramps_kd/kd_server.h"
 
 // clang-format off
 // pinocchio includes have to go before urdf for some reason
@@ -14,15 +14,15 @@ namespace pin = pinocchio;
 
 namespace gramps_kd {
 
-KinematicsServer::KinematicsServer(std::shared_ptr<urdf::Model> urdf_model, const IKParams &ik_params)
+KDServer::KDServer(std::shared_ptr<urdf::Model> urdf_model, const IKParams &ik_params)
     : urdf_model_(urdf_model), model_(std::make_unique<pin::Model>()), ik_params_(ik_params) {
   pin::urdf::buildModel(urdf_model_, *model_);
   data_ = std::make_unique<pin::Data>(*model_);
 }
 
-KinematicsServer::~KinematicsServer() = default;
+KDServer::~KDServer() = default;
 
-bool KinematicsServer::forward_kinematics(gramps_kd::ForwardKinematics::Request &req,
+bool KDServer::forward_kinematics(gramps_kd::ForwardKinematics::Request &req,
                                           gramps_kd::ForwardKinematics::Response &res) {
   if (req.q.data.size() != model_->nq) {
     ROS_ERROR("Incorrect number of joint angles! Should be %d, got %ld.", model_->nq, req.q.data.size());
@@ -55,7 +55,7 @@ bool KinematicsServer::forward_kinematics(gramps_kd::ForwardKinematics::Request 
   return true;
 }
 
-bool KinematicsServer::inverse_kinematics(gramps_kd::InverseKinematics::Request &req,
+bool KDServer::inverse_kinematics(gramps_kd::InverseKinematics::Request &req,
                                           gramps_kd::InverseKinematics::Response &res) {
   if (req.q.data.size() != model_->nq) {
     ROS_ERROR("Incorrect number of joint angles! Should be %d, got %ld.", model_->nq, req.q.data.size());

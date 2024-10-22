@@ -17,11 +17,11 @@ struct IKParams {
   double damping;
 };
 
-class KinematicsServer {
+class KDServer {
 public:
-  explicit KinematicsServer(std::shared_ptr<urdf::Model> urdf_model, const IKParams &ik_params);
+  explicit KDServer(std::shared_ptr<urdf::Model> urdf_model, const IKParams &ik_params);
 
-  ~KinematicsServer();
+  ~KDServer();
 
   bool forward_kinematics(gramps_kd::ForwardKinematics::Request &req, gramps_kd::ForwardKinematics::Response &res);
 
