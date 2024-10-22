@@ -1,3 +1,5 @@
 std_msgs/Float64MultiArray q
+string link_name
 ---
 geometry_msgs/Pose pose
+string frame_id

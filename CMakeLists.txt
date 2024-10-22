@@ -14,6 +14,7 @@ find_package(pinocchio REQUIRED)
 add_service_files(
   FILES
   ForwardKinematics.srv
+  InverseKinematics.srv
 )
 
 generate_messages(
@@ -30,7 +31,7 @@ catkin_package(CATKIN_DEPENDS
   urdf
 )
 
-add_library(gramps_kd
+add_library(gramps_kd STATIC
   src/kinematics_server.cpp
 )
 add_dependencies(gramps_kd

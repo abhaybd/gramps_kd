@@ -1,0 +1,6 @@
+string link_name
+geometry_msgs/Pose pose
+std_msgs/Float64MultiArray q
+---
+std_msgs/Float64MultiArray q
+std_msgs/Float64MultiArray err
