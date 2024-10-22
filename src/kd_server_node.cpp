@@ -9,7 +9,7 @@
 using namespace gramps_kd;
 
 int main(int argc, char **argv) {
-  ros::init(argc, argv, "kinematics_node");
+  ros::init(argc, argv, "gramps_kd");
 
   ros::NodeHandle nh;
 
@@ -34,6 +34,8 @@ int main(int argc, char **argv) {
   KDServer server(urdf_model, ik_params);
   auto fk = nh.advertiseService("forward_kinematics", &KDServer::forward_kinematics, &server);
   auto ik = nh.advertiseService("inverse_kinematics", &KDServer::inverse_kinematics, &server);
+  auto fd = nh.advertiseService("forward_dynamics", &KDServer::forward_dynamics, &server);
+  auto id = nh.advertiseService("inverse_dynamics", &KDServer::inverse_dynamics, &server);
 
   ros::spin();
 

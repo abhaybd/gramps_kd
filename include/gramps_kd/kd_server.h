@@ -1,7 +1,9 @@
 #include <memory>
 #include <pinocchio/multibody/fwd.hpp>
 
+#include "gramps_kd/ForwardDynamics.h"
 #include "gramps_kd/ForwardKinematics.h"
+#include "gramps_kd/InverseDynamics.h"
 #include "gramps_kd/InverseKinematics.h"
 
 namespace urdf {
@@ -26,6 +28,10 @@ public:
   bool forward_kinematics(gramps_kd::ForwardKinematics::Request &req, gramps_kd::ForwardKinematics::Response &res);
 
   bool inverse_kinematics(gramps_kd::InverseKinematics::Request &req, gramps_kd::InverseKinematics::Response &res);
+
+  bool forward_dynamics(gramps_kd::ForwardDynamics::Request &req, gramps_kd::ForwardDynamics::Response &res);
+
+  bool inverse_dynamics(gramps_kd::InverseDynamics::Request &req, gramps_kd::InverseDynamics::Response &res);
 
 private:
   std::shared_ptr<urdf::Model> urdf_model_;

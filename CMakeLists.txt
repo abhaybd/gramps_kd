@@ -15,6 +15,8 @@ add_service_files(
   FILES
   ForwardKinematics.srv
   InverseKinematics.srv
+  ForwardDynamics.srv
+  InverseDynamics.srv
 )
 
 generate_messages(

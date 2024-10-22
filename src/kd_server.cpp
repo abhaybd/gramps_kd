@@ -2,9 +2,11 @@
 
 // clang-format off
 // pinocchio includes have to go before urdf for some reason
+#include "pinocchio/algorithm/aba.hpp"
 #include <pinocchio/algorithm/frames.hpp>
 #include <pinocchio/algorithm/joint-configuration.hpp>
 #include <pinocchio/algorithm/kinematics.hpp>
+#include "pinocchio/algorithm/rnea.hpp"
 #include <pinocchio/parsers/urdf.hpp>
 
 #include <urdf/model.h>
@@ -23,7 +25,7 @@ KDServer::KDServer(std::shared_ptr<urdf::Model> urdf_model, const IKParams &ik_p
 KDServer::~KDServer() = default;
 
 bool KDServer::forward_kinematics(gramps_kd::ForwardKinematics::Request &req,
-                                          gramps_kd::ForwardKinematics::Response &res) {
+                                  gramps_kd::ForwardKinematics::Response &res) {
   if (req.q.data.size() != model_->nq) {
     ROS_ERROR("Incorrect number of joint angles! Should be %d, got %ld.", model_->nq, req.q.data.size());
     return false;
@@ -56,7 +58,7 @@ bool KDServer::forward_kinematics(gramps_kd::ForwardKinematics::Request &req,
 }
 
 bool KDServer::inverse_kinematics(gramps_kd::InverseKinematics::Request &req,
-                                          gramps_kd::InverseKinematics::Response &res) {
+                                  gramps_kd::InverseKinematics::Response &res) {
   if (req.q.data.size() != model_->nq) {
     ROS_ERROR("Incorrect number of joint angles! Should be %d, got %ld.", model_->nq, req.q.data.size());
     return false;
@@ -104,6 +106,60 @@ bool KDServer::inverse_kinematics(gramps_kd::InverseKinematics::Request &req,
     v.noalias() = -J.transpose() * JJt.ldlt().solve(err);
     q = pin::integrate(*model_, q, v * ik_params_.dt);
   }
+}
+
+bool KDServer::forward_dynamics(gramps_kd::ForwardDynamics::Request &req, gramps_kd::ForwardDynamics::Response &res) {
+  if (req.q.data.size() != model_->nq) {
+    ROS_ERROR("Incorrect number of joint angles! Should be %d, got %ld.", model_->nq, req.q.data.size());
+    return false;
+  }
+  if (req.v.data.size() != model_->nv) {
+    ROS_ERROR("Incorrect number of joint velocities! Should be %d, got %ld.", model_->nv, req.v.data.size());
+    return false;
+  }
+  if (req.tau.data.size() != model_->nv) {
+    ROS_ERROR("Incorrect number of joint torques! Should be %d, got %ld.", model_->nv, req.tau.data.size());
+    return false;
+  }
+
+  Eigen::Map<Eigen::VectorXd> q(req.q.data.data(), req.q.data.size());
+  Eigen::Map<Eigen::VectorXd> qd(req.v.data.data(), req.v.data.size());
+  Eigen::Map<Eigen::VectorXd> tau(req.tau.data.data(), req.tau.data.size());
+
+  pin::aba(*model_, *data_, q, qd, tau);
+
+  res.a.data.resize(model_->nv);
+  Eigen::Map<Eigen::VectorXd> qdd(res.a.data.data(), res.a.data.size());
+  qdd = data_->ddq;
+
+  return true;
+}
+
+bool KDServer::inverse_dynamics(gramps_kd::InverseDynamics::Request &req, gramps_kd::InverseDynamics::Response &res) {
+  if (req.q.data.size() != model_->nq) {
+    ROS_ERROR("Incorrect number of joint angles! Should be %d, got %ld.", model_->nq, req.q.data.size());
+    return false;
+  }
+  if (req.v.data.size() != model_->nv) {
+    ROS_ERROR("Incorrect number of joint velocities! Should be %d, got %ld.", model_->nv, req.v.data.size());
+    return false;
+  }
+  if (req.a.data.size() != model_->nv) {
+    ROS_ERROR("Incorrect number of joint accelerations! Should be %d, got %ld.", model_->nv, req.a.data.size());
+    return false;
+  }
+
+  Eigen::Map<Eigen::VectorXd> q(req.q.data.data(), req.q.data.size());
+  Eigen::Map<Eigen::VectorXd> qd(req.v.data.data(), req.v.data.size());
+  Eigen::Map<Eigen::VectorXd> qdd(req.a.data.data(), req.a.data.size());
+
+  pin::rnea(*model_, *data_, q, qd, qdd);
+
+  res.tau.data.resize(model_->nv);
+  Eigen::Map<Eigen::VectorXd> tau(res.tau.data.data(), res.tau.data.size());
+  tau = data_->tau;
+
+  return true;
 }
 
 }  // namespace gramps_kd
