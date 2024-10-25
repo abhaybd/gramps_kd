@@ -24,16 +24,54 @@ KDServer::KDServer(std::shared_ptr<urdf::Model> urdf_model, const IKParams &ik_p
 
 KDServer::~KDServer() = default;
 
+int KDServer::gripper_to_fingers(std::vector<double> &arr) const {
+  if (arr.size() == model_->nq) {
+    return 1;
+  }
+
+  // We assume that multi-fingered grippers are controlled by a single joint position.
+  // We also assume that the gripper joint is the last joint in the model, so we can
+  // distribute the gripper joint position evenly among the fingers, if there are multiple.
+  int n_fingers = model_->nq - arr.size() + 1;
+  double gripper_total = arr.back();
+  double finger_pos = gripper_total / n_fingers;
+
+  arr.reserve(model_->nq);
+  arr.back() = finger_pos;
+  while (arr.size() < model_->nq) {
+    arr.push_back(finger_pos);
+  }
+
+  return n_fingers;
+}
+
+void KDServer::fingers_to_gripper(std::vector<double> &arr, int n_fingers) const {
+  if (n_fingers == 1) {
+    return;
+  }
+
+  // If we previously split the gripper joint position among multiple fingers,
+  // we need to sum the finger positions to get the total gripper joint position.
+  double gripper_total = 0.0;
+  for (int i = 0; i < n_fingers; i++) {
+    gripper_total += arr.back();
+    arr.pop_back();
+  }
+  arr.push_back(gripper_total);
+}
+
 bool KDServer::forward_kinematics(gramps_kd::ForwardKinematics::Request &req,
                                   gramps_kd::ForwardKinematics::Response &res) {
-  if (req.q.data.size() != model_->nq) {
-    ROS_ERROR("Incorrect number of joint angles! Should be %d, got %ld.", model_->nq, req.q.data.size());
+  if (req.q.data.size() > model_->nq) {
+    ROS_ERROR("Too many joint angles! Got %ld, should be at most %d", req.q.data.size(), model_->nq);
     return false;
   }
   if (!model_->existFrame(req.link_name)) {
     ROS_ERROR("No frame found with name: %s", req.link_name.c_str());
     return false;
   }
+
+  gripper_to_fingers(req.q.data);
 
   Eigen::Map<Eigen::VectorXd> q(req.q.data.data(), req.q.data.size());
   pin::forwardKinematics(*model_, *data_, q);
@@ -59,14 +97,16 @@ bool KDServer::forward_kinematics(gramps_kd::ForwardKinematics::Request &req,
 
 bool KDServer::inverse_kinematics(gramps_kd::InverseKinematics::Request &req,
                                   gramps_kd::InverseKinematics::Response &res) {
-  if (req.q.data.size() != model_->nq) {
-    ROS_ERROR("Incorrect number of joint angles! Should be %d, got %ld.", model_->nq, req.q.data.size());
+  if (req.q.data.size() > model_->nq) {
+    ROS_ERROR("Too many joint angles! Got %ld, should be at most %d", req.q.data.size(), model_->nq);
     return false;
   }
   if (!model_->existFrame(req.link_name)) {
     ROS_ERROR("No frame found with name: %s", req.link_name.c_str());
     return false;
   }
+
+  int n_fingers = gripper_to_fingers(req.q.data);
 
   auto frame_id = model_->getFrameId(req.link_name);
   pin::SE3 pose(Eigen::Quaterniond(req.pose.orientation.w, req.pose.orientation.x, req.pose.orientation.y,
@@ -84,6 +124,7 @@ bool KDServer::inverse_kinematics(gramps_kd::InverseKinematics::Request &req,
 
   Eigen::Map<Eigen::VectorXd> err(res.err.data.data(), res.err.data.size());
   Eigen::VectorXd v(model_->nv);
+  bool success = false;
   for (int i = 0;; i++) {
     pin::forwardKinematics(*model_, *data_, q);
     pin::updateFramePlacements(*model_, *data_);
@@ -91,10 +132,12 @@ bool KDServer::inverse_kinematics(gramps_kd::InverseKinematics::Request &req,
     const pinocchio::SE3 iMd = data_->oMf[frame_id].actInv(pose);
     err = pinocchio::log6(iMd).toVector();  // in joint frame
     if (err.norm() < ik_params_.eps) {
-      return true;
+      success = true;
+      break;
     }
     if (i >= ik_params_.it_max) {
-      return false;
+      success = false;
+      break;
     }
     pin::computeFrameJacobian(*model_, *data_, q, frame_id, J);
     pin::Data::Matrix6 Jlog;
@@ -106,21 +149,28 @@ bool KDServer::inverse_kinematics(gramps_kd::InverseKinematics::Request &req,
     v.noalias() = -J.transpose() * JJt.ldlt().solve(err);
     q = pin::integrate(*model_, q, v * ik_params_.dt);
   }
+
+  fingers_to_gripper(res.q.data, n_fingers);
+  return success;
 }
 
 bool KDServer::forward_dynamics(gramps_kd::ForwardDynamics::Request &req, gramps_kd::ForwardDynamics::Response &res) {
-  if (req.q.data.size() != model_->nq) {
-    ROS_ERROR("Incorrect number of joint angles! Should be %d, got %ld.", model_->nq, req.q.data.size());
+  if (req.q.data.size() > model_->nq) {
+    ROS_ERROR("Too many joint angles! Got %ld, should be at most %d", req.q.data.size(), model_->nq);
     return false;
   }
-  if (req.v.data.size() != model_->nv) {
-    ROS_ERROR("Incorrect number of joint velocities! Should be %d, got %ld.", model_->nv, req.v.data.size());
+  if (req.v.data.size() > model_->nv) {
+    ROS_ERROR("Too many joint velocities! Got %ld, should be at most %d", req.v.data.size(), model_->nv);
     return false;
   }
-  if (req.tau.data.size() != model_->nv) {
-    ROS_ERROR("Incorrect number of joint torques! Should be %d, got %ld.", model_->nv, req.tau.data.size());
+  if (req.tau.data.size() > model_->nv) {
+    ROS_ERROR("Too many joint torques! Got %ld, should be at most %d", req.tau.data.size(), model_->nv);
     return false;
   }
+
+  int n_fingers = gripper_to_fingers(req.q.data);
+  gripper_to_fingers(req.v.data);
+  gripper_to_fingers(req.tau.data);
 
   Eigen::Map<Eigen::VectorXd> q(req.q.data.data(), req.q.data.size());
   Eigen::Map<Eigen::VectorXd> qd(req.v.data.data(), req.v.data.size());
@@ -131,23 +181,28 @@ bool KDServer::forward_dynamics(gramps_kd::ForwardDynamics::Request &req, gramps
   res.a.data.resize(model_->nv);
   Eigen::Map<Eigen::VectorXd> qdd(res.a.data.data(), res.a.data.size());
   qdd = data_->ddq;
+  fingers_to_gripper(res.a.data, n_fingers);
 
   return true;
 }
 
 bool KDServer::inverse_dynamics(gramps_kd::InverseDynamics::Request &req, gramps_kd::InverseDynamics::Response &res) {
-  if (req.q.data.size() != model_->nq) {
-    ROS_ERROR("Incorrect number of joint angles! Should be %d, got %ld.", model_->nq, req.q.data.size());
+  if (req.q.data.size() > model_->nq) {
+    ROS_ERROR("Too many joint angles! Got %ld, should be at most %d", req.q.data.size(), model_->nq);
     return false;
   }
-  if (req.v.data.size() != model_->nv) {
-    ROS_ERROR("Incorrect number of joint velocities! Should be %d, got %ld.", model_->nv, req.v.data.size());
+  if (req.v.data.size() > model_->nv) {
+    ROS_ERROR("Too many joint velocities! Got %ld, should be at most %d", req.v.data.size(), model_->nv);
     return false;
   }
-  if (req.a.data.size() != model_->nv) {
-    ROS_ERROR("Incorrect number of joint accelerations! Should be %d, got %ld.", model_->nv, req.a.data.size());
+  if (req.a.data.size() > model_->nv) {
+    ROS_ERROR("Too many joint accelerations! Got %ld, should be at most %d", req.a.data.size(), model_->nv);
     return false;
   }
+
+  int n_fingers = gripper_to_fingers(req.q.data);
+  gripper_to_fingers(req.v.data);
+  gripper_to_fingers(req.a.data);
 
   Eigen::Map<Eigen::VectorXd> q(req.q.data.data(), req.q.data.size());
   Eigen::Map<Eigen::VectorXd> qd(req.v.data.data(), req.v.data.size());
@@ -158,6 +213,7 @@ bool KDServer::inverse_dynamics(gramps_kd::InverseDynamics::Request &req, gramps
   res.tau.data.resize(model_->nv);
   Eigen::Map<Eigen::VectorXd> tau(res.tau.data.data(), res.tau.data.size());
   tau = data_->tau;
+  fingers_to_gripper(res.tau.data, n_fingers);
 
   return true;
 }

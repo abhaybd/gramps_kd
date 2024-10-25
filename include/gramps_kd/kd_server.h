@@ -38,6 +38,10 @@ private:
   std::unique_ptr<pinocchio::Model> model_;
   std::unique_ptr<pinocchio::Data> data_;
   const IKParams ik_params_;
+
+  int gripper_to_fingers(std::vector<double> &arr) const;
+
+  void fingers_to_gripper(std::vector<double> &arr, int n_fingers) const;
 };
 
 }  // namespace gramps_kd
