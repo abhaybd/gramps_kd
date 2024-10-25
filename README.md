@@ -4,7 +4,9 @@ This repository provides a ROS service for forward/inverse kinematics and dynami
 
 ## Installation
 
-Clone into your workspace and run `rosdep install` to install dependencies.
+1. Clone into your workspace's `src` directory
+2. From your workspace root, run `rosdep install --from-paths src --ignore-src -y`
+3. Build with `catkin build`
 
 ## Usage
 
@@ -38,8 +40,7 @@ fk = rospy.ServiceProxy("forward_kinematics", ForwardKinematics)
 ik = rospy.ServiceProxy("inverse_kinematics", InverseKinematics)
 
 curr_state: JointState = rospy.wait_for_message("/joint_states", JointState)
-q = curr_state.position
-q_msg = Float64MultiArray(data=q)
+q_msg = Float64MultiArray(data=curr_state.position)
 
 fk_res = fk(q_msg, "panda_hand")
 print(fk_res)
